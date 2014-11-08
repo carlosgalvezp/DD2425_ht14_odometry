@@ -1,13 +1,14 @@
 #include "ros/ros.h"
 #include "ras_arduino_msgs/Encoders.h"
+#include "geometry_msgs/Pose2D.h"
 
 #define PUBLISH_RATE 10 // Hz
 #define QUEUE_SIZE 1000
 
 // ** Robot params
-#define TICKS_PER_REV 360     // Ticks per revolution for encoders
-#define WHEEL_RADIUS  0.05  // Wheel radius [m]
-#define WHEEL_BASE    0.205    // Distance between wheels [m]
+#define TICKS_PER_REV 360       // Ticks per revolution for encoders
+#define WHEEL_RADIUS  0.05      // Wheel radius [m]
+#define WHEEL_BASE    0.205     // Distance between wheels [m]
 
 class Odometric_coordinates
 {
@@ -23,6 +24,7 @@ private:
 
     ros::NodeHandle n_;
 
+    ros::Publisher pose2d_pub_;
     ros::Subscriber encoder_sub_;
 
     // Callback func when encoder data received
@@ -50,6 +52,8 @@ Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
     y = 0;
     angle = 0;
 
+    // Publisher
+    pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>("/robot/pose2d", QUEUE_SIZE);
     // Subscriber
     encoder_sub_ = n_.subscribe("/kobuki/encoders", QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
 }
@@ -63,18 +67,35 @@ void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::C
     delta_y = (d_left + d_right) / 2 * sin(angle);
     delta_angle = (d_left - d_right) / WHEEL_BASE;
 
+    // positive x - straight from initial pose, positive y - to the right from initial pose, positive angle - clockwise from x axis.
     x += delta_x;
     y += delta_y;
     angle += delta_angle;
     angle = fmod(angle, 2*M_PI);
-
-    // print
-    std::cout << "x: " << x << " y: " << y << " angle: " << angle << std::endl;
 }
 
 void Odometric_coordinates::run()
 {
-    ros::spin();
+    ros::Rate loop_rate(PUBLISH_RATE);
+
+    while(ros::ok())
+    {
+        geometry_msgs::Pose2D msg;
+
+        msg.x = x;
+        msg.y = y;
+        msg.theta = angle;
+
+        // print
+        std::cout << "delta_x: " << delta_x << " delta_y: " << delta_y << " delta_theta: " << delta_angle << std::endl;
+        std::cout << "x: " << x << " y: " << y << " theta: " << angle << "\n" << std::endl;
+
+        pose2d_pub_.publish(msg);
+
+        // ** Sleep
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
 
     std::cout << "Exiting...\n";
 }
