@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  ras_arduino_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -82,7 +83,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES odometry
-#  CATKIN_DEPENDS other_catkin_pkg
+  CATKIN_DEPENDS   roscpp ras_arduino_msgs geometry_msgs
 #  DEPENDS system_lib
 )
 
