@@ -24,6 +24,7 @@ private:
 
     ros::NodeHandle n_;
 
+    // Publishes geometry_msgs message to topic: robot/pose2d with x, y coordinates and CONTINUOUS angle.
     ros::Publisher pose2d_pub_;
     ros::Subscriber encoder_sub_;
 
@@ -55,7 +56,7 @@ Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
     // Publisher
     pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>("/robot/pose2d", QUEUE_SIZE);
     // Subscriber
-    encoder_sub_ = n_.subscribe("/kobuki/encoders", QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
+    encoder_sub_ = n_.subscribe("/arduino/encoders", QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
 }
 
 void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
@@ -71,7 +72,7 @@ void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::C
     x += delta_x;
     y += delta_y;
     angle += delta_angle;
-    angle = fmod(angle, 2*M_PI);
+    //angle = fmod(angle, 2*M_PI);
 }
 
 void Odometric_coordinates::run()
