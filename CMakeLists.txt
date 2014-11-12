@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   ras_arduino_msgs
+  ras_utils
 )
 
 ## System dependencies are found with CMake's conventions
@@ -83,7 +84,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES odometry
-  CATKIN_DEPENDS   roscpp ras_arduino_msgs geometry_msgs
+#  CATKIN_DEPENDS   roscpp ras_arduino_msgs geometry_msgs ras_utils
 #  DEPENDS system_lib
 )
 
@@ -159,6 +160,7 @@ catkin_package(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+include_directories(${catkin_INCLUDE_DIRS})
 
 add_executable(odometry src/odometry.cpp)
 target_link_libraries(odometry ${catkin_LIBRARIES})
