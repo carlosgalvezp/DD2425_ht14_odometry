@@ -62,8 +62,8 @@ Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
     // Publisher
     pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>("/robot/odometry", QUEUE_SIZE);
     // Subscriber
-//    encoder_sub_ = n_.subscribe("/arduino/encoders", QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
-    imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
+    encoder_sub_ = n_.subscribe("/arduino/encoders", QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
+    // imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
 
 }
 
