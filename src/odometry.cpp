@@ -2,9 +2,12 @@
 #include "ras_arduino_msgs/Encoders.h"
 #include "geometry_msgs/Pose2D.h"
 #include <visualization_msgs/MarkerArray.h>
+
 #include "sensor_msgs/Imu.h"
 #include "ras_utils/ras_utils.h"
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_datatypes.h>
+#include <geometry_msgs/Point.h>
 
 #define PUBLISH_RATE 50 // Hz
 #define QUEUE_SIZE 1000
@@ -24,7 +27,7 @@ public:
 private:
 
     double delta_x, delta_y, delta_angle;
-    double x, y, angle;
+    double x_, y_, angle_;
 
     ros::NodeHandle n_;
 
@@ -38,7 +41,7 @@ private:
     void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg);
     void IMUCallback(const sensor_msgs::Imu::ConstPtr& msg);
 
-    void publish_transform(double x, double y, double theta);
+    void publish_transform(double x_, double y_, double theta);
 
     void publish_marker();
 
@@ -63,9 +66,9 @@ Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
     : n_(n), IMU_init_(false)
 {
     // initial coordinates and angle
-    x = 0;
-    y = 0;
-    angle = 0;
+    x_ = 0;
+    y_ = 0;
+    angle_ = 0;
 
     // Publisher
     pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>(TOPIC_ODOMETRY, QUEUE_SIZE);
@@ -84,7 +87,7 @@ void Odometric_coordinates::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
         t_IMU = ros::WallTime::now();
         return;
     }
-    angle += msg->angular_velocity.z * RAS_Utils::time_diff_ms(t_IMU, ros::WallTime::now()) * 0.001;
+    angle_ += msg->angular_velocity.z * RAS_Utils::time_diff_ms(t_IMU, ros::WallTime::now()) * 0.001;
     t_IMU = ros::WallTime::now();
 }
 
@@ -93,14 +96,14 @@ void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::C
     double d_left  = -(msg->delta_encoder1 / TICKS_PER_REV) * 2.0 * M_PI * WHEEL_RADIUS;
     double d_right = -(msg->delta_encoder2 / TICKS_PER_REV) * 2.0 * M_PI * WHEEL_RADIUS;
 
-    delta_x = 0.5 * (d_left + d_right) * cos(angle);
-    delta_y = 0.5 * (d_left + d_right) * sin(angle);
+    delta_x = 0.5 * (d_left + d_right) * cos(angle_);
+    delta_y = 0.5 * (d_left + d_right) * sin(angle_);
     delta_angle = -(d_left - d_right) / WHEEL_BASE;
 
     // positive x - straight from initial pose, positive y - to the right from initial pose, positive angle - clockwise from x axis.
-    x += delta_x;
-    y += delta_y;
-    angle += delta_angle;
+    x_ += delta_x;
+    y_ += delta_y;
+    angle_ += delta_angle;
     //angle = fmod(angle, 2*M_PI);
 }
 
@@ -112,12 +115,12 @@ void Odometric_coordinates::run()
     {
         geometry_msgs::Pose2D msg;
 
-        msg.x = x;
-        msg.y = y;
-        msg.theta = angle;
+        msg.x = x_;
+        msg.y = y_;
+        msg.theta = angle_;
 
         pose2d_pub_.publish(msg);
-        publish_transform(x,y,angle);
+        publish_transform(x_,y_,angle_);
 
         publish_marker();
         // ** Sleep
@@ -137,6 +140,8 @@ void Odometric_coordinates::publish_transform(double x, double y, double theta)
     q.setRPY(0, 0, theta);
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), COORD_FRAME_WORLD, COORD_FRAME_ROBOT));
+    br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), COORD_FRAME_WORLD, "/odom"));
+
 }
 
 void Odometric_coordinates::publish_marker()
@@ -153,13 +158,13 @@ void Odometric_coordinates::publish_marker()
     marker_obj.ns = "Robot";
     marker_obj.id = 0;
     marker_obj.action = visualization_msgs::Marker::ADD;
-    marker_obj.pose.position.x = x;
-    marker_obj.pose.position.y = y;
-    marker_obj.pose.position.z = 0;
+    marker_obj.pose.position.x = x_;
+    marker_obj.pose.position.y = y_;
+    marker_obj.pose.position.z = 0.05;
 
     marker_obj.pose.orientation.x = 0.0;
     marker_obj.pose.orientation.y = 0.0;
-    marker_obj.pose.orientation.z = angle;
+    marker_obj.pose.orientation.z = angle_;
     marker_obj.pose.orientation.w = 1.0;
     marker_obj.scale.x = 0.1;
     marker_obj.scale.y = 0.1;
@@ -177,14 +182,18 @@ void Odometric_coordinates::publish_marker()
     marker_arrow.ns = "Robot";
     marker_arrow.id = 1;
     marker_arrow.action = visualization_msgs::Marker::ADD;
-    marker_arrow.pose.position.x = x;
-    marker_arrow.pose.position.y = y;
-    marker_arrow.pose.position.z = 0;
 
-    marker_arrow.pose.orientation.x = 0.0;
-    marker_arrow.pose.orientation.y = 0.0;
-    marker_arrow.pose.orientation.z = angle;
-    marker_arrow.pose.orientation.w = 1.0;
+    tf::Quaternion q;
+    q.setRPY(0,0,angle_);
+    marker_arrow.pose.position.x = x_;
+    marker_arrow.pose.position.y = y_;
+    marker_arrow.pose.position.z = 0.05;
+
+    marker_arrow.pose.orientation.x = q.x();
+    marker_arrow.pose.orientation.y = q.y();
+    marker_arrow.pose.orientation.z = q.z();
+    marker_arrow.pose.orientation.w = q.w();
+
     marker_arrow.scale.x = 0.2;
     marker_arrow.scale.y = 0.02;
     marker_arrow.scale.z = 0.02;
