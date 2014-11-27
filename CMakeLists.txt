@@ -83,7 +83,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+  INCLUDE_DIRS include
 #  LIBRARIES odometry
 #  CATKIN_DEPENDS   roscpp ras_arduino_msgs geometry_msgs ras_utils
 #  DEPENDS system_lib
@@ -161,7 +161,17 @@ catkin_package(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
-include_directories(${catkin_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS})
 
-add_executable(odometry src/odometry.cpp)
-target_link_libraries(odometry ${catkin_LIBRARIES})
+# Eigen
+find_package(Eigen REQUIRED)
+include_directories(${EIGEN_INCLUDE_DIRS})
+
+file (GLOB SOURCES src/*.cpp)
+file (GLOB HEADERS include/${PROJECT_NAME}/*.h)
+
+add_library(odometry_lib ${SOURCES} ${HEADERS})
+target_link_libraries(odometry_lib ${catkin_LIBRARIES})
+
+add_executable(odometry src/apps/odometry_node.cpp)
+target_link_libraries(odometry ${catkin_LIBRARIES} odometry_lib)

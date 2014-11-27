@@ -9,6 +9,8 @@
 #include <tf/transform_datatypes.h>
 #include <geometry_msgs/Point.h>
 
+#include <odometry/localization.h>
+
 #define PUBLISH_RATE 50 // Hz
 #define QUEUE_SIZE 1000
 
