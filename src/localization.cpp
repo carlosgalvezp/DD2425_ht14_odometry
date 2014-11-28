@@ -19,11 +19,16 @@ Localization::Localization()
 }
 
 void Localization::updatePose(const Eigen::Vector2f &u, const Eigen::Vector2f &z, double delta_t,
-                         Eigen::Vector3f &mu, Eigen::Vector3f &sigma)
+                         Eigen::Vector3f &mu, Eigen::Matrix3f &sigma)
 {
+    Eigen::Vector3f mu_bar;
+    Eigen::Matrix3f sigma_bar;
+
     // ** Predict
+    predict( mu, sigma, u, delta_t, mu_bar, sigma_bar );
 
     // ** Update
+    update( mu_bar, sigma_bar, z, mu, sigma );
 }
 
 void Localization::predict(const Eigen::Vector3f &mu, const Eigen::Matrix3f &sigma, const Eigen::Vector2f &u, double delta_t,
@@ -64,13 +69,24 @@ void Localization::motion_model(const Eigen::Vector3f &mu, const Eigen::Vector2f
     mu_bar(0,0) = x_bar;
     mu_bar(1,0) = y_bar;
     mu_bar(2,0) = theta_bar;
-    // TO DO: F
+
+    F << 1.0, 0.0, -v*sin(theta)*delta_t,
+         0.0, 1.0, v*cos(theta)*delta_t,
+         0.0, 0.0, 1.0;
 }
 
 void Localization::measurement_model(const Eigen::Vector3f &mu_bar, const std::vector<Position> &map,
                                      std::size_t index, Eigen::Vector2f &z_hat, Eigen::MatrixXf &H)
 {
-    // TO DO
+    z_hat(0,0) = sqrt( pow(map[index].x_ - mu_bar(0,0), 2) + pow( map[index].y_ - mu_bar(1,0), 2 ) );
+    z_hat(1,0) = atan2( map[index].y_ - mu_bar(1,0), map[index].x_ - mu_bar(0,0) ) - mu_bar(2,0);
+
+    H(0,0) = ( mu_bar(0,0) - map[index].x_ ) / z_hat(0,0);
+    H(1,0) = - ( mu_bar(1,0) - map[index].y_ ) / pow( z_hat(0,0), 2 );
+    H(0,1) = ( mu_bar(1,0) - map[index].y_ ) / z_hat(0,0);
+    H(1,1) = ( mu_bar(0,0) - map[index].x_ ) / pow( z_hat(0,0), 2 );
+    H(0,2) = 0.0;
+    H(1,2) = -1.0;
 }
 
 

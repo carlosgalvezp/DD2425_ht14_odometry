@@ -42,7 +42,7 @@ public:
      * @param sigma:    updated covariance
      */
     void updatePose(const Eigen::Vector2f &u, const Eigen::Vector2f &z, double delta_t,
-                          Eigen::Vector3f &mu, Eigen::Vector3f &sigma);
+                          Eigen::Vector3f &mu, Eigen::Matrix3f &sigma);
 
 private:
     Eigen::Vector3f mu_;        // Internal representation of the state mean
