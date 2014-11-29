@@ -28,12 +28,12 @@ public:
 
 private:
 
-    double delta_x, delta_y, delta_angle;
+    //double delta_x, delta_y, delta_angle;
     double x_, y_, angle_;
 
     ros::NodeHandle n_;
 
-    // Publishes geometry_msgs message to topic: robot/pose2d with x, y coordinates and CONTINUOUS angle.
+    // Publishes geometry_msgs message to topic: robot/pose2d with x, y coordinates and angle.
     ros::Publisher pose2d_pub_, marker_pub_;
     ros::Subscriber encoder_sub_;
     ros::Subscriber imu_sub_;
@@ -49,6 +49,14 @@ private:
 
     ros::WallTime t_IMU;
     bool IMU_init_;
+
+    Localization localization_;
+    ros::WallTime t_;
+
+    Eigen::Vector3f mu_;
+    Eigen::Vector2f u_;
+    Eigen::Matrix3f sigma_;
+    Eigen::Vector2f z_;     // TODO: Nothing with z_ is implemented
 };
 
 int main (int argc, char* argv[])
@@ -79,6 +87,7 @@ Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
     encoder_sub_ = n_.subscribe("/arduino/encoders", QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
     // imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
 
+    z_ << 0.0, 0.0;
 }
 
 void Odometric_coordinates::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
@@ -95,22 +104,28 @@ void Odometric_coordinates::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
 
 void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
 {
-    double d_left  = -(msg->delta_encoder1 / TICKS_PER_REV) * 2.0 * M_PI * WHEEL_RADIUS;
-    double d_right = -(msg->delta_encoder2 / TICKS_PER_REV) * 2.0 * M_PI * WHEEL_RADIUS;
+    ros::WallTime t (ros::WallTime::now());
+    double deltaT = RAS_Utils::time_diff_ms(t_, t) * 0.001;     //deltaT = t - t_;
+    t_ = t;
 
-    delta_x = 0.5 * (d_left + d_right) * cos(angle_);
-    delta_y = 0.5 * (d_left + d_right) * sin(angle_);
-    delta_angle = -(d_left - d_right) / WHEEL_BASE;
+    double w_right = -( 2 * M_PI * msg->delta_encoder2 ) / ( TICKS_PER_REV * deltaT );
+    double w_left = -( 2 * M_PI * msg->delta_encoder1 ) / ( TICKS_PER_REV * deltaT );
+    double w = ( w_right - w_left ) * WHEEL_RADIUS / WHEEL_BASE;
+    double v = ( w_right + w_left ) * WHEEL_RADIUS / 2;
 
-    // positive x - straight from initial pose, positive y - to the right from initial pose, positive angle - clockwise from x axis.
-    x_ += delta_x;
-    y_ += delta_y;
-    angle_ += delta_angle;
-    //angle = fmod(angle, 2*M_PI);
+    u_ << v * deltaT * cos( mu_(2,0) ), v * deltaT * sin( mu_(2,0) ), w * deltaT;
+
+    localization_.updatePose(u_,z_,deltaT, mu_, sigma_);
+
+    x_ = mu_(0,0);
+    y_ = mu_(1,0);
+    angle_ = mu_(1,0);
 }
 
 void Odometric_coordinates::run()
 {
+    t_ = ros::WallTime::now();
+
     ros::Rate loop_rate(PUBLISH_RATE);
 
     while(ros::ok())

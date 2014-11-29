@@ -2,6 +2,7 @@
 #define LOCALIZATION_H
 
 #include <ras_utils/graph/position.h>
+#include "ras_utils/ras_utils.h"
 #include <vector>
 // Eigen
 #include <Eigen/Core>
