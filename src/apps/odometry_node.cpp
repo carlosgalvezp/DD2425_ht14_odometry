@@ -48,13 +48,12 @@ private:
     void publish_marker();
 
     ros::WallTime t_IMU;
-    bool IMU_init_;
+    bool IMU_init_, encoders_init_;
 
     Localization localization_;
-    ros::WallTime t_;
+    uint32_t timestamp_;
 
     Eigen::Vector3f mu_;
-    Eigen::Vector2f u_;
     Eigen::Matrix3f sigma_;
     Eigen::Vector2f z_;     // TODO: Nothing with z_ is implemented
 };
@@ -104,28 +103,33 @@ void Odometric_coordinates::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
 
 void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
 {
-    ros::WallTime t (ros::WallTime::now());
-    double deltaT = RAS_Utils::time_diff_ms(t_, t) * 0.001;     //deltaT = t - t_;
-    t_ = t;
+    if(!encoders_init_)
+    {
+        timestamp_ = msg->timestamp;
+        encoders_init_ = false;
+        return;
+    }
+
+    double deltaT = (msg->timestamp - timestamp_) * 0.001;     //Timestamp is given in ms
+    timestamp_ = msg->timestamp;
 
     double w_right = -( 2 * M_PI * msg->delta_encoder2 ) / ( TICKS_PER_REV * deltaT );
     double w_left = -( 2 * M_PI * msg->delta_encoder1 ) / ( TICKS_PER_REV * deltaT );
     double w = ( w_right - w_left ) * WHEEL_RADIUS / WHEEL_BASE;
     double v = ( w_right + w_left ) * WHEEL_RADIUS / 2;
 
-    u_ << v * deltaT * cos( mu_(2,0) ), v * deltaT * sin( mu_(2,0) ), w * deltaT;
+    Eigen::Vector2f u;
+    u << v, w;
 
-    localization_.updatePose(u_,z_,deltaT, mu_, sigma_);
+    localization_.updatePose(u,z_,deltaT, mu_, sigma_);
 
     x_ = mu_(0,0);
     y_ = mu_(1,0);
-    angle_ = mu_(1,0);
+    angle_ = mu_(2,0);
 }
 
 void Odometric_coordinates::run()
 {
-    t_ = ros::WallTime::now();
-
     ros::Rate loop_rate(PUBLISH_RATE);
 
     while(ros::ok())
