@@ -78,7 +78,7 @@ Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
     pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>(TOPIC_ODOMETRY, QUEUE_SIZE);
     marker_pub_ = n_.advertise<visualization_msgs::MarkerArray>(TOPIC_MARKERS, QUEUE_SIZE);
     // Subscriber
-    encoder_sub_ = n_.subscribe(TOPIC_ENCODERS, QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
+    encoder_sub_ = n_.subscribe(TOPIC_ARDUINO_ENCODERS, QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
     // imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
 
     z_ << 0.0, 0.0;
