@@ -29,7 +29,7 @@ public:
 private:
 
     //double delta_x, delta_y, delta_angle;
-    double x_, y_, angle_;
+    double x, y, theta;
 
     ros::NodeHandle n_;
 
@@ -43,15 +43,15 @@ private:
     void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg);
     void IMUCallback(const sensor_msgs::Imu::ConstPtr& msg);
 
-    void publish_transform(double x_, double y_, double theta);
+    void publish_transform(double x, double y, double theta);
 
-    void publish_marker();
+    void publish_marker(double x, double y, double theta);
 
     ros::WallTime t_IMU;
     bool IMU_init_, encoders_init_;
 
     Localization localization_;
-    uint32_t timestamp_;
+    int timestamp_;
 
     Eigen::Vector3f mu_;
     Eigen::Matrix3f sigma_;
@@ -74,19 +74,18 @@ int main (int argc, char* argv[])
 Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
     : n_(n), IMU_init_(false)
 {
-    // initial coordinates and angle
-    x_ = 0;
-    y_ = 0;
-    angle_ = 0;
-
     // Publisher
     pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>(TOPIC_ODOMETRY, QUEUE_SIZE);
     marker_pub_ = n_.advertise<visualization_msgs::MarkerArray>(TOPIC_MARKERS, QUEUE_SIZE);
     // Subscriber
-    encoder_sub_ = n_.subscribe("/arduino/encoders", QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
+    encoder_sub_ = n_.subscribe(TOPIC_ENCODERS, QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
     // imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
 
     z_ << 0.0, 0.0;
+    mu_     << 0.0, 0.0, 0.0;
+    sigma_  << SIGMA_0*SIGMA_0, 0.0, 0.0,
+               0.0, SIGMA_0*SIGMA_0, 0.0,
+               0.0, 0.0, SIGMA_0*SIGMA_0;
 }
 
 void Odometric_coordinates::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
@@ -97,21 +96,13 @@ void Odometric_coordinates::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
         t_IMU = ros::WallTime::now();
         return;
     }
-    angle_ += msg->angular_velocity.z * RAS_Utils::time_diff_ms(t_IMU, ros::WallTime::now()) * 0.001;
+    theta += msg->angular_velocity.z * RAS_Utils::time_diff_ms(t_IMU, ros::WallTime::now()) * 0.001;
     t_IMU = ros::WallTime::now();
 }
 
 void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
-{
-    if(!encoders_init_)
-    {
-        timestamp_ = msg->timestamp;
-        encoders_init_ = false;
-        return;
-    }
-
-    double deltaT = (msg->timestamp - timestamp_) * 0.001;     //Timestamp is given in ms
-    timestamp_ = msg->timestamp;
+{    
+    double deltaT = msg->timestamp * 0.001;     //Timestamp is given in ms
 
     double w_right = -( 2 * M_PI * msg->delta_encoder2 ) / ( TICKS_PER_REV * deltaT );
     double w_left = -( 2 * M_PI * msg->delta_encoder1 ) / ( TICKS_PER_REV * deltaT );
@@ -120,12 +111,7 @@ void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::C
 
     Eigen::Vector2f u;
     u << v, w;
-
     localization_.updatePose(u,z_,deltaT, mu_, sigma_);
-
-    x_ = mu_(0,0);
-    y_ = mu_(1,0);
-    angle_ = mu_(2,0);
 }
 
 void Odometric_coordinates::run()
@@ -136,20 +122,18 @@ void Odometric_coordinates::run()
     {
         geometry_msgs::Pose2D msg;
 
-        msg.x = x_;
-        msg.y = y_;
-        msg.theta = angle_;
-
+        msg.x = mu_(0,0);
+        msg.y = mu_(1,0);
+        msg.theta = mu_(2,0);
+        ROS_INFO("[Odometry] %.3f, %.3f, %.3f",msg.x,msg.y,msg.theta);
         pose2d_pub_.publish(msg);
-        publish_transform(x_,y_,angle_);
 
-        publish_marker();
+        publish_transform(msg.x, msg.y, msg.theta);
+        publish_marker(msg.x, msg.y, msg.theta);
         // ** Sleep
         ros::spinOnce();
         loop_rate.sleep();
     }
-
-    std::cout << "Exiting...\n";
 }
 
 void Odometric_coordinates::publish_transform(double x, double y, double theta)
@@ -165,7 +149,7 @@ void Odometric_coordinates::publish_transform(double x, double y, double theta)
 
 }
 
-void Odometric_coordinates::publish_marker()
+void Odometric_coordinates::publish_marker(double x, double y, double theta)
 {
     visualization_msgs::MarkerArray msg;
     msg.markers.resize(2); // Print object position and arrow
@@ -179,13 +163,13 @@ void Odometric_coordinates::publish_marker()
     marker_obj.ns = "Robot";
     marker_obj.id = 0;
     marker_obj.action = visualization_msgs::Marker::ADD;
-    marker_obj.pose.position.x = x_;
-    marker_obj.pose.position.y = y_;
+    marker_obj.pose.position.x = x;
+    marker_obj.pose.position.y = y;
     marker_obj.pose.position.z = 0.05;
 
     marker_obj.pose.orientation.x = 0.0;
     marker_obj.pose.orientation.y = 0.0;
-    marker_obj.pose.orientation.z = angle_;
+    marker_obj.pose.orientation.z = theta;
     marker_obj.pose.orientation.w = 1.0;
     marker_obj.scale.x = 0.1;
     marker_obj.scale.y = 0.1;
@@ -205,9 +189,9 @@ void Odometric_coordinates::publish_marker()
     marker_arrow.action = visualization_msgs::Marker::ADD;
 
     tf::Quaternion q;
-    q.setRPY(0,0,angle_);
-    marker_arrow.pose.position.x = x_;
-    marker_arrow.pose.position.y = y_;
+    q.setRPY(0,0,theta);
+    marker_arrow.pose.position.x = x;
+    marker_arrow.pose.position.y = y;
     marker_arrow.pose.position.z = 0.05;
 
     marker_arrow.pose.orientation.x = q.x();

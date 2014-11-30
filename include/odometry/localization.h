@@ -46,11 +46,8 @@ public:
                           Eigen::Vector3f &mu, Eigen::Matrix3f &sigma);
 
 private:
-    Eigen::Vector3f mu_;        // Internal representation of the state mean
-    Eigen::Matrix3f sigma_;     // Internal representation of the state covariance
-
     Eigen::Matrix3f Q_;         // Process noise
-    Eigen::Matrix3f R_;         // Measurement noise
+    Eigen::Matrix2f R_;         // Measurement noise
 
     Eigen::Matrix3f I3;         // Identity 3x3
 

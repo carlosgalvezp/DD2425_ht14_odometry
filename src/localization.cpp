@@ -3,11 +3,7 @@ using namespace Eigen;
 
 Localization::Localization()
 {
-    mu_     << 0.0, 0.0, 0.0;
-    sigma_  << SIGMA_0*SIGMA_0, 0.0, 0.0,
-               0.0, SIGMA_0*SIGMA_0, 0.0,
-               0.0, 0.0, SIGMA_0*SIGMA_0;
-
+    std::cout << "CONSTRUCTOR"<<std::endl;
     Q_      << Q_XY0*Q_XY0, 0.0, 0.0,
                0.0, Q_XY0*Q_XY0, 0.0,
                0.0, 0.0, Q_THETA0*Q_THETA0;
