@@ -1,7 +1,9 @@
 #include "ros/ros.h"
 #include "ras_arduino_msgs/Encoders.h"
+#include "ras_arduino_msgs/ADConverter.h"
 #include "geometry_msgs/Pose2D.h"
 #include <visualization_msgs/MarkerArray.h>
+#include <ras_utils/ras_sensor_utils.h>
 
 #include "sensor_msgs/Imu.h"
 #include "ras_utils/ras_utils.h"
@@ -19,11 +21,14 @@
 #define WHEEL_RADIUS  0.05      // Wheel radius [m]
 #define WHEEL_BASE    0.205     // Distance between wheels [m]
 
-class Odometric_coordinates
+// ** IR params
+#define SIDE_IR_SENSORS_SEPARATION 15 // XXX PUT THE CORRECT NUMBER!!! Separation between front and back sensor [cm]
+#define N_IR_SAMPLES               5 // Number of samples over which to take the average to compute the initial pose
+class Odometry
 {
 public:
 
-    Odometric_coordinates(const ros::NodeHandle& n);
+    Odometry(const ros::NodeHandle& n);
     void run();
 
 private:
@@ -37,10 +42,13 @@ private:
     ros::Publisher pose2d_pub_, marker_pub_;
     ros::Subscriber encoder_sub_;
     ros::Subscriber imu_sub_;
+    ros::Subscriber adc_sub_;
     static tf::TransformBroadcaster br;
 
     // Callback func when encoder data received
     void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg);
+    void adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr& msg);
+
     void IMUCallback(const sensor_msgs::Imu::ConstPtr& msg);
 
     void publish_transform(double x, double y, double theta);
@@ -48,10 +56,12 @@ private:
     void publish_marker(double x, double y, double theta);
 
     ros::WallTime t_IMU;
-    bool IMU_init_, encoders_init_;
+    bool IMU_init_, encoders_init_, first_pose_estimate_init_;
 
     Localization localization_;
     int timestamp_;
+    int first_pose_counter_;
+    std::vector<double> sensor_values_;
 
     Eigen::Vector3f mu_;
     Eigen::Matrix3f sigma_;
@@ -65,20 +75,21 @@ int main (int argc, char* argv[])
     ros::NodeHandle n;
 
     // ** Create odometry object
-    Odometric_coordinates odo(n);
+    Odometry odo(n);
 
     // ** Run
     odo.run();
 }
 
-Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
-    : n_(n), IMU_init_(false)
+Odometry::Odometry(const ros::NodeHandle &n)
+    : n_(n), IMU_init_(false), first_pose_estimate_init_(false), first_pose_counter_(0)
 {
     // Publisher
     pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>(TOPIC_ODOMETRY, QUEUE_SIZE);
     marker_pub_ = n_.advertise<visualization_msgs::MarkerArray>(TOPIC_MARKERS, QUEUE_SIZE);
     // Subscriber
-    encoder_sub_ = n_.subscribe(TOPIC_ARDUINO_ENCODERS, QUEUE_SIZE,  &Odometric_coordinates::encodersCallback, this);
+    encoder_sub_ = n_.subscribe(TOPIC_ARDUINO_ENCODERS, QUEUE_SIZE,  &Odometry::encodersCallback, this);
+    adc_sub_     = n_.subscribe(TOPIC_ARDUINO_ADC, QUEUE_SIZE, &Odometry::adcCallback, this);
     // imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
 
     z_ << 0.0, 0.0;
@@ -86,9 +97,11 @@ Odometric_coordinates::Odometric_coordinates(const ros::NodeHandle &n)
     sigma_  << SIGMA_0*SIGMA_0, 0.0, 0.0,
                0.0, SIGMA_0*SIGMA_0, 0.0,
                0.0, 0.0, SIGMA_0*SIGMA_0;
+
+    sensor_values_.resize(4);
 }
 
-void Odometric_coordinates::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
+void Odometry::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
 {
     if(!IMU_init_)
     {
@@ -100,21 +113,55 @@ void Odometric_coordinates::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
     t_IMU = ros::WallTime::now();
 }
 
-void Odometric_coordinates::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
-{    
-    double deltaT = msg->timestamp * 0.001;     //Timestamp is given in ms
+void Odometry::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
+{
+    if(first_pose_estimate_init_)
+    {
+        double deltaT = msg->timestamp * 0.001;     //Timestamp is given in ms
 
-    double w_right = -( 2 * M_PI * msg->delta_encoder2 ) / ( TICKS_PER_REV * deltaT );
-    double w_left = -( 2 * M_PI * msg->delta_encoder1 ) / ( TICKS_PER_REV * deltaT );
-    double w = ( w_right - w_left ) * WHEEL_RADIUS / WHEEL_BASE;
-    double v = ( w_right + w_left ) * WHEEL_RADIUS / 2;
+        double w_right = -( 2 * M_PI * msg->delta_encoder2 ) / ( TICKS_PER_REV * deltaT );
+        double w_left = -( 2 * M_PI * msg->delta_encoder1 ) / ( TICKS_PER_REV * deltaT );
+        double w = ( w_right - w_left ) * WHEEL_RADIUS / WHEEL_BASE;
+        double v = ( w_right + w_left ) * WHEEL_RADIUS / 2;
 
-    Eigen::Vector2f u;
-    u << v, w;
-    localization_.updatePose(u,z_,deltaT, mu_, sigma_);
+        Eigen::Vector2f u;
+        u << v, w;
+        localization_.updatePose(u,z_,deltaT, mu_, sigma_);
+    }
 }
 
-void Odometric_coordinates::run()
+void Odometry::adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr &msg)
+{
+    // ** Convert ADC data
+    double front_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch4);
+    double back_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch3);
+    double front_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch1);
+    double back_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch2);
+
+    sensor_values_[0] += front_right_cm/N_IR_SAMPLES;
+    sensor_values_[1] += back_right_cm /N_IR_SAMPLES;
+    sensor_values_[2] += front_left_cm /N_IR_SAMPLES;
+    sensor_values_[3] += back_left_cm / N_IR_SAMPLES;
+
+    first_pose_counter_ ++;
+    if(first_pose_counter_ > N_IR_SAMPLES)
+    {
+        // ** Compute initial angle
+        double theta1 =  atan2(sensor_values_[0] - sensor_values_[1], SIDE_IR_SENSORS_SEPARATION); // Right sensor
+        double theta2 = -atan2(sensor_values_[2] - sensor_values_[3], SIDE_IR_SENSORS_SEPARATION); // Left sensor (negative angle)
+
+        double theta = 0.5 * (theta1 + theta2);
+
+        // ** Set initial mu
+        mu_ << 0.0, 0.0, theta;
+
+        // ** Unsubscribe
+        adc_sub_.shutdown();
+        first_pose_estimate_init_ = true;
+    }
+}
+
+void Odometry::run()
 {
     ros::Rate loop_rate(PUBLISH_RATE);
 
@@ -136,7 +183,7 @@ void Odometric_coordinates::run()
     }
 }
 
-void Odometric_coordinates::publish_transform(double x, double y, double theta)
+void Odometry::publish_transform(double x, double y, double theta)
 {
     static tf::TransformBroadcaster br;
     tf::Transform transform;
@@ -149,7 +196,7 @@ void Odometric_coordinates::publish_transform(double x, double y, double theta)
 
 }
 
-void Odometric_coordinates::publish_marker(double x, double y, double theta)
+void Odometry::publish_marker(double x, double y, double theta)
 {
     visualization_msgs::MarkerArray msg;
     msg.markers.resize(2); // Print object position and arrow
