@@ -12,6 +12,8 @@ Localization::Localization()
                0.0,     R_THETA*R_THETA;
 
     I3 = Eigen::Matrix3f::Identity();
+
+    readObjectsMap(RAS_Names::OBJECT_MAP_PATH, this->objects_map_);
 }
 
 void Localization::updatePose(const Eigen::Vector2f &u, const Eigen::Vector2f &z, double delta_t,
@@ -136,7 +138,21 @@ void Localization::measurement_model_ML(const Eigen::Vector3f &mu_bar, const Eig
     }
 }
 
+void Localization::readObjectsMap(const std::string &path, std::vector<Position> &objects_map)
+{
+    std::ifstream file;
+    file.open(path);
+    int n_objects;
+    file >> n_objects;
 
+    for(std::size_t i = 0; i < n_objects; ++i)
+    {
+        int x,y;
+        file >> x;
+        file >> y;
+        objects_map.push_back(Position(x,y));
+    }
+}
 
 
 

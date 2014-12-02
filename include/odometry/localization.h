@@ -4,6 +4,8 @@
 #include <ras_utils/graph/position.h>
 #include "ras_utils/ras_utils.h"
 #include <vector>
+#include <fstream>
+#include <iostream>
 // Eigen
 #include <Eigen/Core>
 #include <Eigen/LU>
@@ -106,6 +108,7 @@ private:
     void measurement_model_ML(const Eigen::Vector3f &mu_bar, const Eigen::Matrix3f &sigma_bar, const std::vector<Position> &map, const Eigen::Vector2f &z,
                                            Eigen::Vector2f z_hat, Eigen::MatrixXf &H, Eigen::MatrixXf &S);
 
+    void readObjectsMap(const std::string &path, std::vector<Position> &objects_map);
 };
 
 #endif // LOCALIZATION_H
