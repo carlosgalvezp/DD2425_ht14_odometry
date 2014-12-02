@@ -43,6 +43,8 @@ private:
     ros::Subscriber encoder_sub_;
     ros::Subscriber imu_sub_;
     ros::Subscriber adc_sub_;
+    ros::Subscriber object_position_sub_;
+
     static tf::TransformBroadcaster br;
 
     // Callback func when encoder data received
@@ -50,6 +52,8 @@ private:
     void adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr& msg);
 
     void IMUCallback(const sensor_msgs::Imu::ConstPtr& msg);
+
+    void objectPositionCallback(const geometry_msgs::Pose2D::ConstPtr& msg);
 
     void publish_transform(double x, double y, double theta);
 
@@ -90,6 +94,7 @@ Odometry::Odometry(const ros::NodeHandle &n)
     // Subscriber
     encoder_sub_ = n_.subscribe(TOPIC_ARDUINO_ENCODERS, QUEUE_SIZE,  &Odometry::encodersCallback, this);
     adc_sub_     = n_.subscribe(TOPIC_ARDUINO_ADC, QUEUE_SIZE, &Odometry::adcCallback, this);
+    object_position_sub_ = n_.subscribe(TOPIC_OBJECT_POSITION, 10, &Odometry::objectPositionCallback, this);
     // imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
 
     z_ << 0.0, 0.0;
@@ -99,6 +104,28 @@ Odometry::Odometry(const ros::NodeHandle &n)
                0.0, 0.0, SIGMA_0*SIGMA_0;
 
     sensor_values_.resize(4);
+}
+
+void Odometry::run()
+{
+    ros::Rate loop_rate(PUBLISH_RATE);
+
+    while(ros::ok())
+    {
+        geometry_msgs::Pose2D msg;
+
+        msg.x = mu_(0,0);
+        msg.y = mu_(1,0);
+        msg.theta = mu_(2,0);
+        ROS_INFO("[Odometry] %.3f, %.3f, %.3f",msg.x,msg.y,msg.theta);
+        pose2d_pub_.publish(msg);
+
+        publish_transform(msg.x, msg.y, msg.theta);
+        publish_marker(msg.x, msg.y, msg.theta);
+        // ** Sleep
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
 }
 
 void Odometry::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
@@ -127,6 +154,9 @@ void Odometry::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
         Eigen::Vector2f u;
         u << v, w;
         localization_.updatePose(u,z_,deltaT, mu_, sigma_);
+        // Reset z
+        z_ << 0.0,0.0;
+
     }
 }
 
@@ -161,26 +191,9 @@ void Odometry::adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr &msg)
     }
 }
 
-void Odometry::run()
+void Odometry::objectPositionCallback(const geometry_msgs::Pose2D::ConstPtr &msg)
 {
-    ros::Rate loop_rate(PUBLISH_RATE);
-
-    while(ros::ok())
-    {
-        geometry_msgs::Pose2D msg;
-
-        msg.x = mu_(0,0);
-        msg.y = mu_(1,0);
-        msg.theta = mu_(2,0);
-        ROS_INFO("[Odometry] %.3f, %.3f, %.3f",msg.x,msg.y,msg.theta);
-        pose2d_pub_.publish(msg);
-
-        publish_transform(msg.x, msg.y, msg.theta);
-        publish_marker(msg.x, msg.y, msg.theta);
-        // ** Sleep
-        ros::spinOnce();
-        loop_rate.sleep();
-    }
+    z_ << msg->x, msg->theta;
 }
 
 void Odometry::publish_transform(double x, double y, double theta)

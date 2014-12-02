@@ -24,7 +24,7 @@ void Localization::updatePose(const Eigen::Vector2f &u, const Eigen::Vector2f &z
     predict( mu, sigma, u, delta_t, mu_bar, sigma_bar );
 
     // if z is not 0 then update
-    if ( z(0,0) && z(1,0) )
+    if ( z(0,0) )
     {
         // ** Update
         update( mu_bar, sigma_bar, z, mu, sigma );
@@ -125,6 +125,7 @@ void Localization::measurement_model_ML(const Eigen::Vector3f &mu_bar, const Eig
         double det = std::pow((2*M_PI*S_i).determinant(), -0.5);
         double phi_i = det*std::exp(-0.5 * nu_i.transpose()*S_i.inverse()*nu_i);
 
+        // TO DO: OUTLIER REJECTION
         if(phi_i > max_likelihood)
         {
             max_likelihood = phi_i;
