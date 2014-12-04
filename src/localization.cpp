@@ -13,7 +13,7 @@ Localization::Localization()
 
     I3 = Eigen::Matrix3f::Identity();
 
-    readObjectsMap(RAS_Names::OBJECT_MAP_PATH, this->objects_map_);
+    readObjectsMap(RAS_Names::OBJECT_POSITIONS_PATH, this->objects_map_);
 }
 
 void Localization::updatePose(const Eigen::Vector2f &u, const Eigen::Vector2f &z, double delta_t,
