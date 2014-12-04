@@ -22,7 +22,7 @@
 #define WHEEL_BASE    0.205     // Distance between wheels [m]
 
 // ** IR params
-#define SIDE_IR_SENSORS_SEPARATION 15 // XXX PUT THE CORRECT NUMBER!!! Separation between front and back sensor [cm]
+#define SIDE_IR_SENSORS_SEPARATION 18 // Separation between front and back sensor [cm]
 #define N_IR_SAMPLES               5 // Number of samples over which to take the average to compute the initial pose
 class Odometry
 {
@@ -117,7 +117,7 @@ void Odometry::run()
         msg.x = mu_(0,0);
         msg.y = mu_(1,0);
         msg.theta = mu_(2,0);
-        ROS_INFO("[Odometry] %.3f, %.3f, %.3f",msg.x,msg.y,msg.theta);
+//        ROS_INFO("[Odometry] %.3f, %.3f, %.3f",msg.x,msg.y,msg.theta);
         pose2d_pub_.publish(msg);
 
         publish_transform(msg.x, msg.y, msg.theta);
