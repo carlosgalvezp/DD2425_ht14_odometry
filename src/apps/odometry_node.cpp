@@ -94,7 +94,7 @@ Odometry::Odometry(const ros::NodeHandle &n)
     // Subscriber
     encoder_sub_ = n_.subscribe(TOPIC_ARDUINO_ENCODERS, QUEUE_SIZE,  &Odometry::encodersCallback, this);
     adc_sub_     = n_.subscribe(TOPIC_ARDUINO_ADC, QUEUE_SIZE, &Odometry::adcCallback, this);
-    object_position_sub_ = n_.subscribe(TOPIC_OBJECT_POSITION, 10, &Odometry::objectPositionCallback, this);
+    object_position_sub_ = n_.subscribe(TOPIC_OBJECTS_EKF, 10, &Odometry::objectPositionCallback, this);
     // imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
 
     z_ << 0.0, 0.0;
