@@ -168,6 +168,13 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 find_package(Eigen REQUIRED)
 include_directories(${EIGEN_INCLUDE_DIRS})
 
+# PCL
+find_package(PCL REQUIRED)
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+link_libraries(${PCL_LIBRARIES})
+
+
 file (GLOB SOURCES src/*.cpp)
 file (GLOB HEADERS include/${PROJECT_NAME}/*.h)
 
@@ -175,4 +182,7 @@ add_library(odometry_lib ${SOURCES} ${HEADERS})
 target_link_libraries(odometry_lib ${catkin_LIBRARIES})
 
 add_executable(odometry src/apps/odometry_node.cpp)
+add_executable(test_tf src/apps/test_tf.cpp)
+
 target_link_libraries(odometry ${catkin_LIBRARIES} odometry_lib)
+target_link_libraries(test_tf ${catkin_LIBRARIES} odometry_lib)
