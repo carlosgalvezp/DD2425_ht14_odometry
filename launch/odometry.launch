@@ -1,5 +1,6 @@
 <launch>
 
+<!-- IMU -->
   <include file="$(find phidgets_imu)/launch/imu.launch"/>
 
 <!-- Odometry -->
