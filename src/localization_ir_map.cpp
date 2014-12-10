@@ -87,12 +87,26 @@ double Localization_IR_Map::computeCost(const ras_srv_msgs::IRData::ConstPtr &ad
     ras_srv_msgs::IRData raytraced_data;
     raytrace(test_pose, map, raytraced_data);
 
-    double cost  = pow(adc_data->back        - raytraced_data.back,        2) +
-                   pow(adc_data->back_left   - raytraced_data.back_left,   2) +
-                   pow(adc_data->back_right  - raytraced_data.back_right,  2) +
-                   pow(adc_data->front       - raytraced_data.front,       2) +
-                   pow(adc_data->front_left  - raytraced_data.front_left,  2) +
-                   pow(adc_data->front_right - raytraced_data.front_right, 2);
+    double cost = 0.0;
+
+    // ** Add to the cost only the sensors that are close to the wall
+    if(adc_data->back < MAX_SENSOR_DISTANCE )
+        cost += pow(adc_data->back - raytraced_data.back, 2);
+
+    if(adc_data->front < MAX_SENSOR_DISTANCE)
+        cost += pow(adc_data->front - raytraced_data.front, 2);
+
+    if(adc_data->back_left < MAX_SENSOR_DISTANCE)
+        cost += pow(adc_data->back_left - raytraced_data.back_left, 2);
+
+    if(adc_data->back_right < MAX_SENSOR_DISTANCE)
+        cost += pow(adc_data->back_right - raytraced_data.back_right, 2);
+
+    if(adc_data->front_left < MAX_SENSOR_DISTANCE)
+        cost += pow(adc_data->front_left - raytraced_data.front_left, 2);
+
+    if(adc_data->front_right < MAX_SENSOR_DISTANCE)
+        cost += pow(adc_data->front_right - raytraced_data.front_right, 2);
 
     return cost;
 }
@@ -102,11 +116,11 @@ void Localization_IR_Map::raytrace(const geometry_msgs::Pose2D &test_pose,
                                    ras_srv_msgs::IRData &raytraced_data)
 {
     raytraced_data.front_right = raytraceSensor(test_pose, IR_SENSOR_FRONT_RIGHT, *map);
-    raytraced_data.front_left  = raytraceSensor(test_pose, IR_SENSOR_FRONT_LEFT, *map);
-    raytraced_data.back_right  = raytraceSensor(test_pose, IR_SENSOR_BACK_RIGHT, *map);
-    raytraced_data.back_left   = raytraceSensor(test_pose, IR_SENSOR_BACK_LEFT, *map);
-    raytraced_data.front       = raytraceSensor(test_pose, IR_SENSOR_FRONT, *map);
-    raytraced_data.back        = raytraceSensor(test_pose, IR_SENSOR_BACK, *map);
+    raytraced_data.front_left  = raytraceSensor(test_pose, IR_SENSOR_FRONT_LEFT,  *map);
+    raytraced_data.back_right  = raytraceSensor(test_pose, IR_SENSOR_BACK_RIGHT,  *map);
+    raytraced_data.back_left   = raytraceSensor(test_pose, IR_SENSOR_BACK_LEFT,   *map);
+    raytraced_data.front       = raytraceSensor(test_pose, IR_SENSOR_FRONT,       *map);
+    raytraced_data.back        = raytraceSensor(test_pose, IR_SENSOR_BACK,        *map);
 }
 
 double Localization_IR_Map::raytraceSensor(const geometry_msgs::Pose2D &test_pose, int sensor_id,
@@ -115,8 +129,8 @@ double Localization_IR_Map::raytraceSensor(const geometry_msgs::Pose2D &test_pos
     double sensor_x_pos, sensor_y_pos, sensor_angle;
     computeSensorXYThetaWorld(test_pose, sensor_id, sensor_x_pos, sensor_y_pos, sensor_angle);
 
-    double stepper = 0.1;
-    for(double current_distance = stepper; current_distance < 30; current_distance += stepper)
+    double stepper = 0.001;
+    for(double current_distance = stepper; current_distance < 0.3; current_distance += stepper)
     {
         double new_x_pos = sensor_x_pos + cos(sensor_angle) * current_distance;
         double new_y_pos = sensor_y_pos + sin(sensor_angle) * current_distance;
@@ -148,7 +162,7 @@ void Localization_IR_Map::computeSensorXYThetaWorld(const geometry_msgs::Pose2D 
     switch (sensor_id)
     {
     case IR_SENSOR_FRONT_RIGHT:
-        p.x = SHORT_SENSOR_OFFSET_X;
+        p.x =  SHORT_SENSOR_OFFSET_X;
         p.y = -SHORT_SENSOR_OFFSET_Y;
         sensor_theta = RAS_Utils::normalize_angle(robot_pose.theta - M_PI/2.0);
         break;
@@ -160,21 +174,21 @@ void Localization_IR_Map::computeSensorXYThetaWorld(const geometry_msgs::Pose2D 
         break;
 
     case IR_SENSOR_FRONT_LEFT:
-        p.x = SHORT_SENSOR_OFFSET_X;
-        p.y = SHORT_SENSOR_OFFSET_Y;
+        p.x =  SHORT_SENSOR_OFFSET_X;
+        p.y =  SHORT_SENSOR_OFFSET_Y;
         sensor_theta = RAS_Utils::normalize_angle(robot_pose.theta + M_PI/2.0);
         break;
 
 
     case IR_SENSOR_BACK_LEFT:
         p.x = -SHORT_SENSOR_OFFSET_X;
-        p.y = SHORT_SENSOR_OFFSET_Y;
+        p.y =  SHORT_SENSOR_OFFSET_Y;
         sensor_theta = RAS_Utils::normalize_angle(robot_pose.theta + M_PI/2.0);
         break;
 
     case IR_SENSOR_FRONT:
-        p.x = LONG_SENSOR_OFFSET_X;
-        p.y = 0.0;
+        p.x =  LONG_SENSOR_OFFSET_X;
+        p.y =  0.0;
         sensor_theta = robot_pose.theta;
         break;
 

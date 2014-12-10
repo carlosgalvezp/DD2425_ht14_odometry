@@ -23,6 +23,7 @@
 #define SHORT_SENSOR_OFFSET_Y           0.057 // [m]
 #define LONG_SENSOR_OFFSET_X            0.115 - 0.088 // [m] Robot-center - measurement
 
+#define MAX_SENSOR_DISTANCE             0.1
 
 class Localization_IR_Map
 {    
