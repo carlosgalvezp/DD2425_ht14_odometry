@@ -88,6 +88,8 @@ private:
     Eigen::Vector3f mu_;
     Eigen::Matrix3f sigma_;
     Eigen::Vector2f z_;     // TODO: Nothing with z_ is implemented
+
+    Localization_IR_Map loc_ir_map_;
 };
 
 int main (int argc, char* argv[])
@@ -104,7 +106,7 @@ int main (int argc, char* argv[])
 }
 
 Odometry::Odometry(const ros::NodeHandle &n)
-    : n_(n), IMU_init_(false), first_pose_estimate_init_(false), first_pose_counter_(0), localize_(false)
+    : n_(n), IMU_init_(false), first_pose_estimate_init_(false), first_pose_counter_(0), localize_(true)
 {
     // Publisher
     pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>(TOPIC_ODOMETRY, QUEUE_SIZE);
@@ -134,6 +136,7 @@ void Odometry::run()
 
     while(ros::ok())
     {
+//        ROS_INFO("[Odometry] %.3f, %.3f, %.3f",current_pose_.x, current_pose_.y, current_pose_.theta);
         pose2d_pub_.publish(current_pose_);
 
         publish_transform(current_pose_.x, current_pose_.y, current_pose_.theta);
@@ -157,9 +160,7 @@ void Odometry::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
 }
 
 void Odometry::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
-{
-    if(first_pose_estimate_init_)
-    {
+{;
         double deltaT = msg->timestamp * 0.001;     //Timestamp is given in ms
 
         double w_right = -( 2 * M_PI * msg->delta_encoder2 ) / ( TICKS_PER_REV * deltaT );
@@ -176,46 +177,37 @@ void Odometry::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
         current_pose_.x = mu_(0,0);
         current_pose_.y = mu_(1,0);
         current_pose_.theta = mu_(2,0);
-
-        // ** Update if localization required
-        if(localize_ && map_msg_!= 0 && adc_filtered_msg_ !=0)
-        {
-            Localization_IR_Map loc(map_msg_);
-            loc.updatePose(adc_filtered_msg_, current_pose_, current_pose_);
-        }
-
-    }
 }
 
 void Odometry::adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr &msg)
 {
     // ** Convert ADC data
-    double front_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch4);
-    double back_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch3);
-    double front_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch1);
-    double back_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch2);
+//    double front_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch4);
+//    double back_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch3);
+//    double front_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch1);
+//    double back_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch2);
 
-    sensor_values_[0] += front_right_cm/N_IR_SAMPLES;
-    sensor_values_[1] += back_right_cm /N_IR_SAMPLES;
-    sensor_values_[2] += front_left_cm /N_IR_SAMPLES;
-    sensor_values_[3] += back_left_cm / N_IR_SAMPLES;
+//    sensor_values_[0] += front_right_cm/N_IR_SAMPLES;
+//    sensor_values_[1] += back_right_cm /N_IR_SAMPLES;
+//    sensor_values_[2] += front_left_cm /N_IR_SAMPLES;
+//    sensor_values_[3] += back_left_cm / N_IR_SAMPLES;
 
-    first_pose_counter_ ++;
-    if(first_pose_counter_ > N_IR_SAMPLES)
-    {
-        // ** Compute initial angle
-        double theta1 =  atan2(sensor_values_[0] - sensor_values_[1], SIDE_IR_SENSORS_SEPARATION); // Right sensor
-        double theta2 = -atan2(sensor_values_[2] - sensor_values_[3], SIDE_IR_SENSORS_SEPARATION); // Left sensor (negative angle)
+//    first_pose_counter_ ++;
+//    if(first_pose_counter_ > N_IR_SAMPLES)
+//    {
+//        // ** Compute initial angle
+//        double theta1 =  atan2(sensor_values_[0] - sensor_values_[1], SIDE_IR_SENSORS_SEPARATION); // Right sensor
+//        double theta2 = -atan2(sensor_values_[2] - sensor_values_[3], SIDE_IR_SENSORS_SEPARATION); // Left sensor (negative angle)
 
-        double theta = 0.5 * (theta1 + theta2);
+//        double theta = 0.5 * (theta1 + theta2);
 
-        // ** Set initial mu
-        mu_ << 0.0, 0.0, theta;
+//        // ** Set initial mu
+//        mu_ << 0.0, 0.0, theta;
 
-        // ** Unsubscribe
-        adc_sub_.shutdown();
-        first_pose_estimate_init_ = true;
-    }
+//        // ** Unsubscribe
+//        adc_sub_.shutdown();
+//        first_pose_estimate_init_ = true;
+//    }
 }
 
 void Odometry::mapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg)
@@ -225,11 +217,15 @@ void Odometry::mapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg)
 
 void Odometry::adcFilteredCallback(const ras_srv_msgs::IRData::ConstPtr &msg)
 {
-    this->adc_filtered_msg_ = msg;
+//    this->adc_filtered_msg_ = msg;
+//    double newTheta = loc_ir_map_.updateThetaAuto(msg, current_pose_.theta);
+//    current_pose_.theta = newTheta;
+//    mu_(2,0) = current_pose_.theta;
 }
 
 void Odometry::localizationCallback(const std_msgs::Bool::ConstPtr &msg)
 {
+    ROS_INFO("RECEIVED LOCALIZATION REQUEST");
     this->localize_ = msg->data;
 }
 
