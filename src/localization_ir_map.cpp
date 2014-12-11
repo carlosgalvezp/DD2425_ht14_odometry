@@ -16,9 +16,10 @@ void Localization_IR_Map::updatePose(const ras_srv_msgs::IRData::ConstPtr &adc_m
     ros::WallTime t1(ros::WallTime::now());
     // ** Update theta
     double newTheta = this->updateTheta(adc_msg, current_pose.theta);
-
+    updated_pose = current_pose;
+    updated_pose.theta = newTheta;
     // ** Update pose
-    this->updateXY(current_pose, adc_msg, this->map_, newTheta, updated_pose);
+//    this->updateXY(current_pose, adc_msg, this->map_, newTheta, updated_pose);
     ROS_INFO("[Localization] %.3f ms", RAS_Utils::time_diff_ms(t1, ros::WallTime::now()));
 }
 
@@ -54,7 +55,6 @@ double Localization_IR_Map::updateTheta(const ras_srv_msgs::IRData::ConstPtr &ad
 void Localization_IR_Map::updateXY(const geometry_msgs::Pose2D &currentPose,
                                    const ras_srv_msgs::IRData::ConstPtr &adc_data,
                                    const nav_msgs::OccupancyGrid::ConstPtr &map,
-                                   double updatedTheta,
                                    geometry_msgs::Pose2D &updatedPose)
 {
     double x_optimal, y_optimal, min_cost = std::numeric_limits<double>::infinity();
@@ -66,7 +66,7 @@ void Localization_IR_Map::updateXY(const geometry_msgs::Pose2D &currentPose,
             geometry_msgs::Pose2D test_pose;
             test_pose.x = x;
             test_pose.y = y;
-            test_pose.theta = updatedTheta;
+            test_pose.theta = currentPose.theta;
             double cost = computeCost(adc_data, map, test_pose);
 
             if(cost < min_cost)
@@ -80,7 +80,6 @@ void Localization_IR_Map::updateXY(const geometry_msgs::Pose2D &currentPose,
 
     updatedPose.x = x_optimal;
     updatedPose.y = y_optimal;
-    updatedPose.theta = updatedTheta;
 }
 
 double Localization_IR_Map::computeCost(const ras_srv_msgs::IRData::ConstPtr &adc_data,

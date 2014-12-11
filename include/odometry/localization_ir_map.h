@@ -42,7 +42,6 @@ private:
     void updateXY(const geometry_msgs::Pose2D &currentPose,
                   const ras_srv_msgs::IRDataConstPtr &adc_data,
                   const nav_msgs::OccupancyGrid::ConstPtr &map,
-                  double updatedTheta,
                   geometry_msgs::Pose2D &updatedPose);
 
     double computeCost(const ras_srv_msgs::IRData::ConstPtr &adc_data,
