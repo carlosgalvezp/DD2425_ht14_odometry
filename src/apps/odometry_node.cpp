@@ -28,7 +28,7 @@
 
 // ** IR params
 #define SIDE_IR_SENSORS_SEPARATION 18 // Separation between front and back sensor [cm]
-#define N_IR_SAMPLES               5 // Number of samples over which to take the average to compute the initial pose
+#define N_IR_SAMPLES               10 // Number of samples over which to take the average to compute the initial pose
 class Odometry
 {
 public:
@@ -160,7 +160,9 @@ void Odometry::IMUCallback(const sensor_msgs::Imu::ConstPtr &msg)
 }
 
 void Odometry::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
-{;
+{
+    if(first_pose_estimate_init_)
+    {
         double deltaT = msg->timestamp * 0.001;     //Timestamp is given in ms
 
         double w_right = -( 2 * M_PI * msg->delta_encoder2 ) / ( TICKS_PER_REV * deltaT );
@@ -177,37 +179,38 @@ void Odometry::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
         current_pose_.x = mu_(0,0);
         current_pose_.y = mu_(1,0);
         current_pose_.theta = mu_(2,0);
+    }
 }
 
 void Odometry::adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr &msg)
 {
     // ** Convert ADC data
-//    double front_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch4);
-//    double back_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch3);
-//    double front_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch1);
-//    double back_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch2);
+    double front_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch4);
+    double back_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch3);
+    double front_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch1);
+    double back_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch2);
 
-//    sensor_values_[0] += front_right_cm/N_IR_SAMPLES;
-//    sensor_values_[1] += back_right_cm /N_IR_SAMPLES;
-//    sensor_values_[2] += front_left_cm /N_IR_SAMPLES;
-//    sensor_values_[3] += back_left_cm / N_IR_SAMPLES;
+    sensor_values_[0] += front_right_cm/N_IR_SAMPLES;
+    sensor_values_[1] += back_right_cm /N_IR_SAMPLES;
+    sensor_values_[2] += front_left_cm /N_IR_SAMPLES;
+    sensor_values_[3] += back_left_cm / N_IR_SAMPLES;
 
-//    first_pose_counter_ ++;
-//    if(first_pose_counter_ > N_IR_SAMPLES)
-//    {
-//        // ** Compute initial angle
-//        double theta1 =  atan2(sensor_values_[0] - sensor_values_[1], SIDE_IR_SENSORS_SEPARATION); // Right sensor
-//        double theta2 = -atan2(sensor_values_[2] - sensor_values_[3], SIDE_IR_SENSORS_SEPARATION); // Left sensor (negative angle)
+    first_pose_counter_ ++;
+    if(first_pose_counter_ > N_IR_SAMPLES)
+    {
+        // ** Compute initial angle
+        double theta1 =  atan2(sensor_values_[0] - sensor_values_[1], SIDE_IR_SENSORS_SEPARATION); // Right sensor
+        double theta2 = -atan2(sensor_values_[2] - sensor_values_[3], SIDE_IR_SENSORS_SEPARATION); // Left sensor (negative angle)
 
-//        double theta = 0.5 * (theta1 + theta2);
+        double theta = 0.5 * (theta1 + theta2);
 
-//        // ** Set initial mu
-//        mu_ << 0.0, 0.0, theta;
+        // ** Set initial mu
+        mu_ << 0.0, 0.0, theta;
 
-//        // ** Unsubscribe
-//        adc_sub_.shutdown();
-//        first_pose_estimate_init_ = true;
-//    }
+        // ** Unsubscribe
+        adc_sub_.shutdown();
+        first_pose_estimate_init_ = true;
+    }
 }
 
 void Odometry::mapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg)

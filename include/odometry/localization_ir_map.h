@@ -25,7 +25,7 @@
 
 #define MAX_SENSOR_DISTANCE             0.3
 #define N_MEASUREMENTS_AVERAGE      5
-#define IR_MAX_VARIANCE             0.005  // [m]
+#define IR_MAX_VARIANCE             0.002  // [m]
 
 class Localization_IR_Map
 {    
