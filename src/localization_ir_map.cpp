@@ -10,14 +10,16 @@ Localization_IR_Map::Localization_IR_Map(const nav_msgs::OccupancyGrid::ConstPtr
 }
 
 void Localization_IR_Map::updatePose(const ras_srv_msgs::IRData::ConstPtr &adc_msg,
-                                     const geometry_msgs::Pose2D::ConstPtr &current_pose,
-                                     geometry_msgs::Pose2D::Ptr &updated_pose)
-{    
+                                     const geometry_msgs::Pose2D &current_pose,
+                                     geometry_msgs::Pose2D &updated_pose)
+{
+    ros::WallTime t1(ros::WallTime::now());
     // ** Update theta
-    double newTheta = this->updateTheta(adc_msg, current_pose->theta);
+    double newTheta = this->updateTheta(adc_msg, current_pose.theta);
 
     // ** Update pose
     this->updateXY(current_pose, adc_msg, this->map_, newTheta, updated_pose);
+    ROS_INFO("[Localization] %.3f ms", RAS_Utils::time_diff_ms(t1, ros::WallTime::now()));
 }
 
 double Localization_IR_Map::updateTheta(const ras_srv_msgs::IRData::ConstPtr &adc_data, double currentTheta)
@@ -49,16 +51,17 @@ double Localization_IR_Map::updateTheta(const ras_srv_msgs::IRData::ConstPtr &ad
     return real_theta;
 }
 
-void Localization_IR_Map::updateXY(const geometry_msgs::Pose2D::ConstPtr &currentPose,
+void Localization_IR_Map::updateXY(const geometry_msgs::Pose2D &currentPose,
                                    const ras_srv_msgs::IRData::ConstPtr &adc_data,
                                    const nav_msgs::OccupancyGrid::ConstPtr &map,
-                                   double updatedTheta, geometry_msgs::Pose2D::Ptr &updatedPose)
+                                   double updatedTheta,
+                                   geometry_msgs::Pose2D &updatedPose)
 {
     double x_optimal, y_optimal, min_cost = std::numeric_limits<double>::infinity();
 
-    for(double x = currentPose->x - SEARCH_REGION_W/2.0; x < currentPose->x + SEARCH_REGION_W/2.0; x+=SEARCH_RESOLUTION)
+    for(double x = currentPose.x - SEARCH_REGION_W/2.0; x < currentPose.x + SEARCH_REGION_W/2.0; x+=SEARCH_RESOLUTION)
     {
-        for(double y = currentPose->y - SEARCH_REGION_H/2.0; y < currentPose->y + SEARCH_REGION_H/2.0; y+=SEARCH_RESOLUTION)
+        for(double y = currentPose.y - SEARCH_REGION_H/2.0; y < currentPose.y + SEARCH_REGION_H/2.0; y+=SEARCH_RESOLUTION)
         {
             geometry_msgs::Pose2D test_pose;
             test_pose.x = x;
@@ -75,9 +78,9 @@ void Localization_IR_Map::updateXY(const geometry_msgs::Pose2D::ConstPtr &curren
         }
     }
 
-    updatedPose->x = x_optimal;
-    updatedPose->y = y_optimal;
-    updatedPose->theta = updatedTheta;
+    updatedPose.x = x_optimal;
+    updatedPose.y = y_optimal;
+    updatedPose.theta = updatedTheta;
 }
 
 double Localization_IR_Map::computeCost(const ras_srv_msgs::IRData::ConstPtr &adc_data,

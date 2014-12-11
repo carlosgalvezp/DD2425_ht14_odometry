@@ -4,6 +4,8 @@
 #include "geometry_msgs/Pose2D.h"
 #include <visualization_msgs/MarkerArray.h>
 #include <ras_utils/ras_sensor_utils.h>
+#include <ras_srv_msgs/IRData.h>
+#include <nav_msgs/OccupancyGrid.h>
 
 #include "sensor_msgs/Imu.h"
 #include "ras_utils/ras_utils.h"
@@ -11,7 +13,10 @@
 #include <tf/transform_datatypes.h>
 #include <geometry_msgs/Point.h>
 
+#include <std_msgs/Bool.h>
+
 #include <odometry/localization.h>
+#include <odometry/localization_ir_map.h>
 
 #define PUBLISH_RATE 50 // Hz
 #define QUEUE_SIZE 1000
@@ -45,11 +50,15 @@ private:
     ros::Subscriber adc_sub_;
     ros::Subscriber object_position_sub_;
 
+    ros::Subscriber map_sub_, localize_sub_, adc_filtered_sub_;
+
     static tf::TransformBroadcaster br;
 
     // Callback func when encoder data received
     void encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg);
     void adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr& msg);
+    void adcFilteredCallback(const ras_srv_msgs::IRData::ConstPtr & msg);
+    void mapCallback(const nav_msgs::OccupancyGrid::ConstPtr & msg);
 
     void IMUCallback(const sensor_msgs::Imu::ConstPtr& msg);
 
@@ -59,13 +68,22 @@ private:
 
     void publish_marker(double x, double y, double theta);
 
+    void localizationCallback(const std_msgs::Bool::ConstPtr &msg);
+
     ros::WallTime t_IMU;
     bool IMU_init_, encoders_init_, first_pose_estimate_init_;
+
+    geometry_msgs::Pose2D current_pose_;
 
     Localization localization_;
     int timestamp_;
     int first_pose_counter_;
     std::vector<double> sensor_values_;
+
+    bool localize_;
+
+    nav_msgs::OccupancyGrid::ConstPtr map_msg_;
+    ras_srv_msgs::IRData::ConstPtr adc_filtered_msg_;
 
     Eigen::Vector3f mu_;
     Eigen::Matrix3f sigma_;
@@ -86,7 +104,7 @@ int main (int argc, char* argv[])
 }
 
 Odometry::Odometry(const ros::NodeHandle &n)
-    : n_(n), IMU_init_(false), first_pose_estimate_init_(false), first_pose_counter_(0)
+    : n_(n), IMU_init_(false), first_pose_estimate_init_(false), first_pose_counter_(0), localize_(false)
 {
     // Publisher
     pose2d_pub_ = n_.advertise<geometry_msgs::Pose2D>(TOPIC_ODOMETRY, QUEUE_SIZE);
@@ -96,6 +114,10 @@ Odometry::Odometry(const ros::NodeHandle &n)
     adc_sub_     = n_.subscribe(TOPIC_ARDUINO_ADC, QUEUE_SIZE, &Odometry::adcCallback, this);
 //    object_position_sub_ = n_.subscribe(TOPIC_OBJECTS_EKF, 10, &Odometry::objectPositionCallback, this);
     // imu_sub_ = n_.subscribe("/imu/data", QUEUE_SIZE,  &Odometric_coordinates::IMUCallback, this);
+
+    map_sub_ = n_.subscribe(TOPIC_MAP_OCC_GRID, QUEUE_SIZE, &Odometry::mapCallback, this);
+    localize_sub_ = n_.subscribe(TOPIC_LOCALIZATION, 1, &Odometry::localizationCallback, this);
+    adc_filtered_sub_ = n_.subscribe(TOPIC_ARDUINO_ADC_FILTERED, 1, &Odometry::adcFilteredCallback, this);
 
     z_ << 0.0, 0.0;
     mu_     << 0.0, 0.0, 0.0;
@@ -112,16 +134,10 @@ void Odometry::run()
 
     while(ros::ok())
     {
-        geometry_msgs::Pose2D msg;
+        pose2d_pub_.publish(current_pose_);
 
-        msg.x = mu_(0,0);
-        msg.y = mu_(1,0);
-        msg.theta = mu_(2,0);
-//        ROS_INFO("[Odometry] %.3f, %.3f, %.3f",msg.x,msg.y,msg.theta);
-        pose2d_pub_.publish(msg);
-
-        publish_transform(msg.x, msg.y, msg.theta);
-        publish_marker(msg.x, msg.y, msg.theta);
+        publish_transform(current_pose_.x, current_pose_.y, current_pose_.theta);
+        publish_marker(current_pose_.x, current_pose_.y, current_pose_.theta);
         // ** Sleep
         ros::spinOnce();
         loop_rate.sleep();
@@ -157,6 +173,17 @@ void Odometry::encodersCallback(const ras_arduino_msgs::Encoders::ConstPtr& msg)
         // Reset z
         z_ << 0.0,0.0;
 
+        current_pose_.x = mu_(0,0);
+        current_pose_.y = mu_(1,0);
+        current_pose_.theta = mu_(2,0);
+
+        // ** Update if localization required
+        if(localize_ && map_msg_!= 0 && adc_filtered_msg_ !=0)
+        {
+            Localization_IR_Map loc(map_msg_);
+            loc.updatePose(adc_filtered_msg_, current_pose_, current_pose_);
+        }
+
     }
 }
 
@@ -189,6 +216,21 @@ void Odometry::adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr &msg)
         adc_sub_.shutdown();
         first_pose_estimate_init_ = true;
     }
+}
+
+void Odometry::mapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg)
+{
+    this->map_msg_ = msg;
+}
+
+void Odometry::adcFilteredCallback(const ras_srv_msgs::IRData::ConstPtr &msg)
+{
+    this->adc_filtered_msg_ = msg;
+}
+
+void Odometry::localizationCallback(const std_msgs::Bool::ConstPtr &msg)
+{
+    this->localize_ = msg->data;
 }
 
 void Odometry::objectPositionCallback(const geometry_msgs::Pose2D::ConstPtr &msg)

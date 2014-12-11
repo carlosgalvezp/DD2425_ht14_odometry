@@ -32,17 +32,18 @@ public:
     Localization_IR_Map(const nav_msgs::OccupancyGrid::ConstPtr &map);
 
     void updatePose(const ras_srv_msgs::IRData::ConstPtr &adc_msg,
-                    const geometry_msgs::Pose2D::ConstPtr &current_pose,
-                          geometry_msgs::Pose2D::Ptr      &updated_pose);
+                    const geometry_msgs::Pose2D &current_pose,
+                          geometry_msgs::Pose2D      &updated_pose);
 
     double updateTheta(const ras_srv_msgs::IRData::ConstPtr &adc_data, double currentTheta);
 
 private:
 
-    void updateXY(const geometry_msgs::Pose2D::ConstPtr &currentPose,
+    void updateXY(const geometry_msgs::Pose2D &currentPose,
                   const ras_srv_msgs::IRDataConstPtr &adc_data,
                   const nav_msgs::OccupancyGrid::ConstPtr &map,
-                  double updatedTheta, geometry_msgs::Pose2D::Ptr &updatedPose);
+                  double updatedTheta,
+                  geometry_msgs::Pose2D &updatedPose);
 
     double computeCost(const ras_srv_msgs::IRData::ConstPtr &adc_data,
                      const nav_msgs::OccupancyGrid::ConstPtr &map,
