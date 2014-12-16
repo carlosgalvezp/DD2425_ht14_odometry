@@ -1,7 +1,7 @@
 <launch>
 
 <!-- IMU -->
-<!--  <include file="$(find phidgets_imu)/launch/imu.launch"/> -->
+<include file="$(find phidgets_imu)/launch/imu.launch"/>
 
 <!-- Odometry -->
   <node pkg="odometry" type="odometry" name="odometry" output = "screen" />

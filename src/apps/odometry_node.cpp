@@ -90,6 +90,8 @@ private:
     Eigen::Vector2f z_;     // TODO: Nothing with z_ is implemented
 
     Localization_IR_Map loc_ir_map_;
+
+    int phase_;
 };
 
 int main (int argc, char* argv[])
@@ -127,7 +129,9 @@ Odometry::Odometry(const ros::NodeHandle &n)
                0.0, SIGMA_0*SIGMA_0, 0.0,
                0.0, 0.0, SIGMA_0*SIGMA_0;
 
-    sensor_values_.resize(4);
+    sensor_values_.resize(5);
+
+    n.getParam(PARAM_PHASE,phase_);
 }
 
 void Odometry::run()
@@ -189,11 +193,15 @@ void Odometry::adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr &msg)
     double back_right_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch3);
     double front_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch1);
     double back_left_cm = RAS_Utils::sensors::shortSensorToDistanceInCM(msg->ch2);
+    double back_cm = RAS_Utils::sensors::longSensorToDistanceInCM(msg->ch7);
+
 
     sensor_values_[0] += front_right_cm/N_IR_SAMPLES;
     sensor_values_[1] += back_right_cm /N_IR_SAMPLES;
     sensor_values_[2] += front_left_cm /N_IR_SAMPLES;
     sensor_values_[3] += back_left_cm / N_IR_SAMPLES;
+    sensor_values_[4] += back_cm / N_IR_SAMPLES;
+
 
     first_pose_counter_ ++;
     if(first_pose_counter_ > N_IR_SAMPLES)
@@ -207,10 +215,39 @@ void Odometry::adcCallback(const ras_arduino_msgs::ADConverter::ConstPtr &msg)
         // ** Set initial mu
         mu_ << 0.0, 0.0, theta;
 
+        // ** Store or load initial position to adjust X and Y
+        if(phase_ == 0)
+        {
+            std::ofstream file (RAS_Names::INITIAL_POSITION);
+            file << sensor_values_[0] << std::endl
+                 << sensor_values_[1] << std::endl
+                 << sensor_values_[2] << std::endl
+                 << sensor_values_[3] << std::endl
+                 << sensor_values_[4] << std::endl;
+            file.close();
+        }
+        else
+        {
+            std::ifstream file(RAS_Names::INITIAL_POSITION);
+            double s0,s1,s2,s3,s4;
+            file >> s0 >> s1 >> s2 >> s3 >> s4;
+            file.close();
+            double deltaY = 0.01*0.25 * ( (s2 - sensor_values_[2]) + // Left sensors
+                                     (s3 - sensor_values_[3]) +
+                                     (sensor_values_[0] - s0) + // Right sensors -> opposite diff
+                                     (sensor_values_[1])- s1);
+            double deltaX = 0.01*(sensor_values_[4] - s4);
+
+            mu_(0,0) = deltaX;
+            mu_(1,0) = deltaY;
+        }
+
         // ** Unsubscribe
         adc_sub_.shutdown();
         first_pose_estimate_init_ = true;
     }
+
+
 }
 
 void Odometry::mapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg)
